@@ -1,7 +1,6 @@
 # 2021-12-3
 # created by Yan
-# following "Deeper Depth Prediction with Fully Convolutional Residual Networks"
-# Section 3.2
+# following "Deeper Depth Prediction with Fully Convolutional Residual Networks" Section 3.2
 import paddle
 import paddle.nn as nn
 
