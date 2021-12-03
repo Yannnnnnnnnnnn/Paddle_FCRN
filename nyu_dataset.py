@@ -1,17 +1,19 @@
 # 2021-12-3
-# from https://github.com/stunback/DenseDepth-paddle/blob/main/data/data.py
+# learning from https://github.com/stunback/DenseDepth-paddle/blob/main/data/data.py
 # modified following "Deeper Depth Prediction with Fully Convolutional Residual Networks" Section 4.2
 
-from io import BytesIO
+import os
 import random
-
+from io import BytesIO
 import numpy as np
-import paddle
-from paddle.io import Dataset
-from paddle.vision import transforms
+from zipfile import ZipFile
 from PIL import Image, ImageFile
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
+import paddle
+from paddle.io import Dataset
+from paddle.vision import transforms
+paddle.disable_static()
 
 def _is_pil_image(img):
     return isinstance(img, Image.Image)
@@ -22,9 +24,6 @@ def _is_numpy_image(img):
 
 
 class RandomHorizontalFlip(object):
-    '''
-    随机左右翻转
-    '''
     def __call__(self, sample):
         image, depth = sample['image'], sample['depth']
 
@@ -43,9 +42,6 @@ class RandomHorizontalFlip(object):
 
 
 class RandomChannelSwap(object):
-    '''
-    随机通道交换
-    '''
     def __init__(self, probability):
         from itertools import permutations
         self.probability = probability
@@ -62,11 +58,9 @@ class RandomChannelSwap(object):
 
 
 def loadZipToMem(zip_file):
-    '''
-    将nyu数据集 直接加载到内存中
-    '''
+
     print('Loading dataset zip file...', end='')
-    from zipfile import ZipFile
+
     input_zip = ZipFile(zip_file)
     data = {name: input_zip.read(name) for name in input_zip.namelist()}
     nyu2_train = list(
@@ -74,82 +68,46 @@ def loadZipToMem(zip_file):
     nyu2_test = list(
         (row.split(',') for row in (data['data/nyu2_test.csv']).decode("utf-8").split('\n') if len(row) > 0))
 
-    from sklearn.utils import shuffle
-    nyu2_train = shuffle(nyu2_train, random_state=0)
-
-    # if True: nyu2_train = nyu2_train[:40]
-
     print('Loaded ({0}).'.format(len(nyu2_train)))
     return data, nyu2_train, nyu2_test
 
-
-def loadZipTestToMem(zip_file):
-    '''
-    将nyu数据集中的测试集 加载到内存中
-    '''
-    print('Loading dataset zip file...', end='')
-    from zipfile import ZipFile
-    input_zip = ZipFile(zip_file)
-    data = {name: input_zip.read(name) for name in input_zip.namelist()}
-    nyu2_test = list(
-        (row.split(',') for row in (data['data/nyu2_test.csv']).decode("utf-8").split('\n') if len(row) > 0))
-
-    # if True: nyu2_train = nyu2_train[:40]
-
-    print('Loaded ({0}).'.format(len(nyu2_test)))
-    return data, nyu2_test
-
-
-class depthDatasetMemory(Dataset):
-    '''
-    将内存中的nyu数据集进行预处理，返回paddle的数据集形式
-    '''
-    def __init__(self, data, nyu2_train, transform=None):
-        super(depthDatasetMemory, self).__init__()
-        self.data, self.nyu_dataset = data, nyu2_train
-        self.transform = transform
-
-    def __getitem__(self, idx):
-        sample = self.nyu_dataset[idx]
-        image = Image.open(BytesIO(self.data[sample[0]]))
-        depth = Image.open(BytesIO(self.data[sample[1]]))
-        sample = {'image': image, 'depth': depth}
-        if self.transform:
-            sample = self.transform(sample)
-        return sample
-
-    def __len__(self):
-        return len(self.nyu_dataset)
-
-
 class ToTensor(object):
-    '''
-    将数据集中的RGB和Depth转为paddle tensor，depth需要resize并压缩到10~1000
-    '''
+
     def __init__(self, is_test=False):
+
         self.is_test = is_test
 
     def __call__(self, sample):
+        
         image, depth = sample['image'], sample['depth']
-        image = self.to_tensor(image)
+
+        # resize
+        image = image.resize((320, 240))
         depth = depth.resize((320, 240))
 
+        image = np.array(image)/255.0
+        image = image.astype(dtype=np.float32)
+        depth = np.array(depth)
+        depth = depth.reshape(240,320,1)
+        depth = depth.astype(dtype=np.float32)
+
         if self.is_test:
-            depth = self.to_tensor(depth) / 10.
+            depth = depth/10.0
         else:
-            depth = self.to_tensor(depth) * 1000
+            depth = depth*1000.0
 
-        # put in expected range
-        depth = paddle.clip(depth, 10, 1000)
+        # normalize
+        depth = depth.clip(10, 1000)
+        depth = depth/1000.0
+        
+        # crop center
+        image = image[6:234,8:312,:]
+        depth = depth[6:234,8:312,:]
+
+        image = image.transpose(2,0,1)
+        depth = depth.transpose(2,0,1)
+
         return {'image': image, 'depth': depth}
-
-    def to_tensor(self, pic):
-        if not (_is_pil_image(pic) or _is_numpy_image(pic)):
-            raise TypeError(
-                'pic should be PIL Image or ndarray. Got {}'.format(type(pic)))
-        img = transforms.to_tensor(pic)
-        return img
-
 
 def getNoTransform(is_test=True):
     return transforms.Compose([
@@ -165,23 +123,43 @@ def getDefaultTrainTransform():
     ])
 
 
-def getTrainingTestingDataset():
-    '''
-    对nyu数据集进行预处理，获得训练和验证集
-    '''
-    data, nyu2_train, nyu2_test = loadZipToMem('data/nyu_data.zip')
+class NYUV2_Dataset(Dataset):
 
-    transformed_training = depthDatasetMemory(data, nyu2_train, transform=getDefaultTrainTransform())
-    transformed_testing = depthDatasetMemory(data, nyu2_test, transform=getNoTransform())
+    def __init__(self, data, nyu2_train, transform=None):
+
+        super(NYUV2_Dataset, self).__init__()
+        self.data, self.nyu_dataset = data, nyu2_train
+        self.transform = transform
+
+    def __getitem__(self, idx):
+
+        sample = self.nyu_dataset[idx]
+        image = Image.open(BytesIO(self.data[sample[0]]))
+        depth = Image.open(BytesIO(self.data[sample[1]]))
+        sample = {'image': image, 'depth': depth}
+        if self.transform:
+            sample = self.transform(sample)
+        return sample
+
+    def __len__(self):
+
+        return len(self.nyu_dataset)
+
+def getTrainingTestingDataset(nyu_path):
+
+    data, nyu2_train, nyu2_test = loadZipToMem(nyu_path)
+
+    transformed_training = NYUV2_Dataset(data, nyu2_train, transform=getDefaultTrainTransform())
+    transformed_testing = NYUV2_Dataset(data, nyu2_test, transform=getNoTransform())
+
+    # sample = transformed_training[0]
+    # print(sample['image'].shape)
+    # print(sample['image'].numpy().max())
+    # print(sample['depth'].shape)
+    # print(sample['depth'].numpy().max())
 
     return transformed_training, transformed_testing
 
+if __name__ == '__main__':
 
-def getTestingDataset():
-    '''
-    对nyu数据集进行预处理，获得验证集
-    '''
-    data, nyu2_test = loadZipTestToMem('data/nyu_data.zip')
-    transformed_testing = depthDatasetMemory(data, nyu2_test, transform=getNoTransform(True))
-
-    return transformed_testing
+    getTrainingTestingDataset('../nyu_data.zip')

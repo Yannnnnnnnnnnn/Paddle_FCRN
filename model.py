@@ -333,6 +333,9 @@ class ResNet50UpProj(nn.Layer):
         self.up_16x = UpProj(in_channels=128,out_channels=64,BN=True)
         self.convpred = nn.Conv2D(in_channels=64,out_channels=1,kernel_size=3,stride=1,padding=1,bias_attr=True)
 
+        # NOTE:
+        # not the same as papar 
+        self.up_sample = nn.UpsamplingNearest2D(size=(228,304))
 
         self.relu  = nn.ReLU()
 
@@ -392,6 +395,7 @@ class ResNet50UpProj(nn.Layer):
         up_8x = self.up_8x(up_4x)
         up_16x = self.up_16x(up_8x)
         convpred = self.convpred(up_16x)
+        convpred = self.up_sample(convpred)
 
         return convpred
     

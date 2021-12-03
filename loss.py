@@ -19,7 +19,7 @@ def huber_loss(gt,pre):
         diff = (gt-pre).abs()
 
         huber_c = 0.2 * diff.max()
-        huber_mask = ( diff > huber_c )b* 1.0
+        huber_mask = ( diff > huber_c ) * 1.0
 
         huber_loss += diff * ( 1 - huber_mask ) 
         huber_loss += huber_mask * ( diff*diff + huber_c*huber_c )/(huber_c+1e-6)
