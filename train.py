@@ -1,8 +1,5 @@
 import os
-import time
 import argparse
-import configparser
-import datetime
 
 import paddle
 import paddle.nn
@@ -26,8 +23,8 @@ def main(args):
     optimizer = paddle.optimizer.Adam(parameters=model.parameters(), learning_rate=lr)
 
     traindataset, valdataset = getTrainingTestingDataset(nyu_path=args.nyu_v2_path)
-    train_loader = paddle.io.DataLoader(traindataset, batch_size=bs)
-    val_loader = paddle.io.DataLoader(valdataset, batch_size=bs)
+    train_loader = paddle.io.DataLoader(traindataset, batch_size=bs, shuffle=True)
+    val_loader = paddle.io.DataLoader(valdataset, batch_size=bs, shuffle=False)
 
     if not os.path.exists('./logs'):
         os.mkdir('./logs')
@@ -49,7 +46,7 @@ def main(args):
         loss_sum = 0
         loss_cnt = 0
         model.train()
-        for i, sampled_batch in enumerate(train_loader):
+        for i, sampled_batch in enumerate(train_loader()):
 
             # train
             depth_pred = model(sampled_batch['image'])
@@ -65,7 +62,6 @@ def main(args):
             loss_cnt += 1.0
 
             print('TRAIN: progress: ',i," in ",len(train_loader),' loss:',loss[0].numpy()[0])
-            break
         
         loss_sum /= loss_cnt
         train_log.write('epoch:'+str(epoch)+'\t loss:'+str(loss_sum)+'\n')
@@ -77,7 +73,7 @@ def main(args):
         val_log10_sum = 0
         val_cnt = 0
         model.eval()
-        for i, sampled_batch in enumerate(val_loader):
+        for i, sampled_batch in enumerate(val_loader()):
 
             val_depth_pred = model(sampled_batch['image'])
             val_depth_gt = sampled_batch['depth']
@@ -92,20 +88,17 @@ def main(args):
             val_cnt += 1
 
             print('VALID: progress: ',i," in ",len(val_loader),' rmse:',val_rmse)
-            break
 
         val_mae_sum /= val_cnt
         val_rmse_sum /= val_cnt
         val_log10_sum /= val_cnt
 
-        valid_log.write('epoch:'+str(epoch)+str(i)+'\t val_mae:'+str(val_mae_sum)+'\t val_rmse:'+str(val_rmse_sum)+'\t val_log10:'+str(val_log10_sum)+'\n')
+        valid_log.write('epoch:'+str(epoch)+'\t val_mae:'+str(val_mae_sum)+'\t val_rmse:'+str(val_rmse_sum)+'\t val_log10:'+str(val_log10_sum)+'\n')
         valid_log.flush()
 
         # save model
         paddle.save(model.state_dict(), "./logs/FCRN_epochs_{}_{}.pdparams".format(epoch,val_rmse_sum))
         paddle.save(optimizer.state_dict(), "./logs/Adam_epochs_{}_{}.pdopt".format(epoch,val_rmse_sum))
-
-        break
 
     
 

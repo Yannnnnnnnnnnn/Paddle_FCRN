@@ -13,11 +13,9 @@ ImageFile.LOAD_TRUNCATED_IMAGES = True
 import paddle
 from paddle.io import Dataset
 from paddle.vision import transforms
-paddle.disable_static()
 
 def _is_pil_image(img):
     return isinstance(img, Image.Image)
-
 
 def _is_numpy_image(img):
     return isinstance(img, np.ndarray) and (img.ndim in {2, 3})
@@ -98,7 +96,8 @@ class ToTensor(object):
 
         # normalize
         depth = depth.clip(10, 1000)
-        depth = depth/1000.0
+        # max depth is 10m
+        depth = (depth/1000.0) * 10
         
         # crop center
         image = image[6:234,8:312,:]
@@ -106,6 +105,9 @@ class ToTensor(object):
 
         image = image.transpose(2,0,1)
         depth = depth.transpose(2,0,1)
+
+        image = paddle.to_tensor(image)
+        depth = paddle.to_tensor(depth)
 
         return {'image': image, 'depth': depth}
 

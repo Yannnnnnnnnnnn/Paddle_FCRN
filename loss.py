@@ -2,7 +2,6 @@
 # created by Yan
 # following "Deeper Depth Prediction with Fully Convolutional Residual Networks" Section 3.2
 import paddle
-import paddle.nn as nn
 
 def huber_loss(gt,pre):
 
@@ -16,15 +15,19 @@ def huber_loss(gt,pre):
         gt_b = gt[b]
         pre_b = pre[b]
 
-        diff = (gt-pre).abs()
+        diff = (gt_b-pre_b).abs()
 
-        huber_c = 0.2 * diff.max()
+        huber_c = 0.2 * diff.detach().max()
         huber_mask = ( diff > huber_c ) * 1.0
 
-        huber_loss += diff * ( 1 - huber_mask ) 
-        huber_loss += huber_mask * ( diff*diff + huber_c*huber_c )/(huber_c+1e-6)
+        huber_loss_b = diff * ( 1 - huber_mask ) + huber_mask * ( diff*diff + huber_c*huber_c )/(huber_c+1e-6)
 
-    return huber_loss.mean()
+        huber_loss += huber_loss_b.mean()
+
+    return huber_loss/B
+
+    # diff = (gt - pre).abs()
+    # return diff.mean()
 
 if __name__ == '__main__':
 
