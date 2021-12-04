@@ -88,11 +88,14 @@ class ToTensor(object):
         depth = np.array(depth)
         depth = depth.reshape(240,320,1)
         depth = depth.astype(dtype=np.float32)
+        print('depth',depth.min(),depth.max())
 
         if self.is_test:
             depth = depth/10.0
         else:
-            depth = depth*1000.0
+            depth = 1000.0*depth/255.0
+
+        print('depth:',depth.min(),depth.max())
 
         # normalize
         depth = depth.clip(10, 1000)
@@ -154,7 +157,13 @@ def getTrainingTestingDataset(nyu_path):
     transformed_training = NYUV2_Dataset(data, nyu2_train, transform=getDefaultTrainTransform())
     transformed_testing = NYUV2_Dataset(data, nyu2_test, transform=getNoTransform())
 
-    # sample = transformed_training[0]
+    # sample = transformed_training[10]
+    # print(sample['image'].shape)
+    # print(sample['image'].numpy().max())
+    # print(sample['depth'].shape)
+    # print(sample['depth'].numpy().max())
+
+    # sample = transformed_testing[10]
     # print(sample['image'].shape)
     # print(sample['image'].numpy().max())
     # print(sample['depth'].shape)
