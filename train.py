@@ -61,7 +61,8 @@ def main(args):
             loss_sum += loss[0].numpy()[0]
             loss_cnt += 1.0
 
-            print('TRAIN: progress: ',i," in ",len(train_loader),' loss:',loss[0].numpy()[0])
+            if i%100==0:
+                print('TRAIN: progress: ',i," in ",len(train_loader),' loss:',loss[0].numpy()[0])
         
         loss_sum /= loss_cnt
         train_log.write('epoch:'+str(epoch)+'\t loss:'+str(loss_sum)+'\n')
@@ -87,7 +88,8 @@ def main(args):
             val_log10_sum += val_log10
             val_cnt += 1
 
-            print('VALID: progress: ',i," in ",len(val_loader),' rmse:',val_rmse)
+            if i%100==0:
+                print('VALID: progress: ',i," in ",len(val_loader),' rmse:',val_rmse)
 
         val_mae_sum /= val_cnt
         val_rmse_sum /= val_cnt
@@ -99,7 +101,6 @@ def main(args):
         # save model
         paddle.save(model.state_dict(), "./logs/FCRN_epochs_{}_{}.pdparams".format(epoch,val_rmse_sum))
         paddle.save(optimizer.state_dict(), "./logs/Adam_epochs_{}_{}.pdopt".format(epoch,val_rmse_sum))
-
     
 
 if __name__ == '__main__':
